@@ -4,7 +4,8 @@
 
 namespace pico
 {
-    enum FontType {
+    /// @brief Маркер шрифта
+    enum Font {
         // HEIGHT | WIDTH
         SINGLE = 0x11,
         SINGLE_BOLD = 0x12,
@@ -74,8 +75,8 @@ namespace pico
         /// @brief Разрешить автоматический перенос текста по завершению строки
         void setAutoNextLine(bool mode);
         /// @brief Установить режим вывода текста
-        /// @param DOUBLE, SINGLE 
-        void setFont(enum FontType ft);
+        /// @param ft DOUBLE, SINGLE 
+        void setFont(enum Font ft);
     };
 
 } // namespace pico

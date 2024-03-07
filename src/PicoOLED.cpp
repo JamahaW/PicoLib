@@ -208,7 +208,7 @@ static uint16_t T(uint8_t data) {
     return ret;
 }
 
-uint32_t getFont(uint8_t f) {
+static uint32_t getFont(uint8_t f) {
     f -= 32;  // перевод код символа из таблицы ASCII
 
     if (f <= 95)
@@ -245,7 +245,6 @@ pico::OLED::OLED(const uint8_t _address) : address(_address) {}
 #define IN_RANGE(x, mi, ma) (((x) >= (mi)) && ((x) <= (ma)))
 
 void pico::OLED::write(uint8_t data) {
-    // фикс русских букв и некоторых символов
     if (data > 191) return;
 
     if ((data == '\n') || (autoprintln && cursor_x > OLED_MAX_X)) {
@@ -317,9 +316,7 @@ void pico::OLED::init() {
     clear();
 }
 
-void pico::OLED::clear() {
-    clear(0, 0, OLED_MAX_X, OLED_MAX_ROW);
-}
+void pico::OLED::clear() {clear(0, 0, OLED_MAX_X, OLED_MAX_ROW);}
 
 void pico::OLED::clear(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint8_t fill) {
     setWindow(x0, y0, x1, y1);
@@ -343,30 +340,19 @@ void pico::OLED::setBright(uint8_t value) {
     sendTwoCommands(OLED_CONTRAST, value);
 }
 
-void pico::OLED::setInvertColor(bool mode) {
-    sendCommand(mode ? OLED_INVERTDISPLAY : OLED_NORMALDISPLAY);
-}
+void pico::OLED::setInvertColor(bool mode) {sendCommand(mode ? OLED_INVERTDISPLAY : OLED_NORMALDISPLAY);}
 
-void pico::OLED::setInvertText(bool mode) {
-    text_mask = mode * 255;
-}
+void pico::OLED::setInvertText(bool mode) {text_mask = mode * 255;}
 
-void pico::OLED::setFlipV(bool mode) {
-    sendCommand(mode ? OLED_FLIP_V : OLED_NORMAL_V);
-}
+void pico::OLED::setFlipV(bool mode) {sendCommand(mode ? OLED_FLIP_V : OLED_NORMAL_V);}
 
-void pico::OLED::setFlipH(bool mode) {
-    sendCommand(mode ? OLED_FLIP_H : OLED_NORMAL_H);
-}
+void pico::OLED::setFlipH(bool mode) {sendCommand(mode ? OLED_FLIP_H : OLED_NORMAL_H);}
 
-void pico::OLED::setAutoNextLine(bool mode) {
-    autoprintln = mode;
-}
+void pico::OLED::setAutoNextLine(bool mode) {autoprintln = mode;}
 
-void pico::OLED::setFont(FontType ft) {
+void pico::OLED::setFont(Font ft) {
     font_height = (ft & 0xF0) >> 4;
     font_width = (ft & 0x0F);
-
     updateTextWindow();
 }
 
@@ -423,6 +409,4 @@ void pico::OLED::endTransm() {
     writes = 0;
 }
 
-void pico::OLED::updateTextWindow() {
-    setWindow(cursor_x, cursor_y, OLED_MAX_X, cursor_y + font_height - 1);
-}
+void pico::OLED::updateTextWindow() {setWindow(cursor_x, cursor_y, OLED_MAX_X, cursor_y + font_height - 1);}
