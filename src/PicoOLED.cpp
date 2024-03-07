@@ -200,11 +200,11 @@ static const uint32_t font[] PROGMEM = {
 #define OLED_MAX_ROW 7
 #define OLED_MAX_X 127
 
-static uint16_t T(uint8_t data) {
-    static constexpr uint8_t R[4]{ 0x0, 0x3, 0xC, 0xF };
+static const uint8_t bitDecode[] = { 0x00, 0x03, 0x0C, 0x0F };
 
+static uint16_t setWideByte(uint8_t data) {
     uint16_t ret = 0;
-    for (uint8_t i = 0; i < 8; i += 2) ret |= R[((0b11 << i) & data) >> i] << (i << 1);
+    for (uint8_t i = 0; i < 8; i += 2) ret |= (bitDecode[((0b11 << i) & data) >> i] << (i << 1));
     return ret;
 }
 
@@ -247,8 +247,8 @@ pico::OLED::OLED(const uint8_t _address) : address(_address) {}
 void pico::OLED::write(uint8_t data) {
     if (data > 191) return;
 
-    if ((data == '\n') || (autoprintln && cursor_x > OLED_MAX_X)) {
-        setCursor(0, cursor_y + font_height);  // переставляем курсор
+    if ((data == '\n') || (autoprintln && x > OLED_MAX_X)) {
+        setCursor(0, y + font_height);  // переставляем курсор
         return;
     }
 
@@ -257,12 +257,12 @@ void pico::OLED::write(uint8_t data) {
         return;
     }
 
-    if (cursor_y > OLED_MAX_ROW) return;  // дисплей переполнен
+    if (y > OLED_MAX_ROW) return;  // дисплей переполнен
 
-    if (autoprintln && data == ' ' && cursor_x == 0) return;
+    if (autoprintln && data == ' ' && x == 0) return;
 
-    if (!IN_RANGE(cursor_x, 0, OLED_MAX_X - OLED_FONT_WIDTH)) {
-        cursor_x += OLED_FONT_WIDTH;  // пропускаем вывод "за экраном"
+    if (!IN_RANGE(x, 0, OLED_MAX_X - OLED_FONT_WIDTH)) {
+        x += OLED_FONT_WIDTH;  // пропускаем вывод "за экраном"
         return;
     }
 
@@ -272,7 +272,7 @@ void pico::OLED::write(uint8_t data) {
 
     uint8_t col;
 
-    for (uint8_t offset = 0; offset < width_6; offset += OLED_FONT_WIDTH, cursor_x += font_width) {
+    for (uint8_t offset = 0; offset < width_6; offset += OLED_FONT_WIDTH, x += font_width) {
         col = OLED_FONT_GET_COL(bits, offset) ^ text_mask;
 
         for (uint8_t t = 0; t < font_width; t++) {
@@ -281,7 +281,7 @@ void pico::OLED::write(uint8_t data) {
                 sendByte(col);
             }
             else if (font_height == 2) {
-                uint16_t f_data = T(col);
+                uint16_t f_data = setWideByte(col);
                 sendByte(lowByte(f_data));
                 sendByte(highByte(f_data));
             }
@@ -291,16 +291,14 @@ void pico::OLED::write(uint8_t data) {
     for (uint8_t i = 0; i < font_height; i++)
         sendByte(text_mask);
 
-    cursor_x++;
+    x++;
 
     endTransm();
 }
 
-#define OLED_WIRE_SPEED 200000UL
-
-void pico::OLED::init() {
+void pico::OLED::init(uint32_t clock) {
     Wire.begin(true);
-    Wire.setClock(OLED_WIRE_SPEED);
+    Wire.setClock(clock);
 
     beginCommand();
     for (uint8_t i = 0; i < 15; i++) sendByte(pgm_read_byte(&oled_init_commands[i]));
@@ -316,43 +314,44 @@ void pico::OLED::init() {
     clear();
 }
 
-void pico::OLED::clear() {clear(0, 0, OLED_MAX_X, OLED_MAX_ROW);}
+void pico::OLED::clear() { clear(0, 0, OLED_MAX_X, OLED_MAX_ROW); }
 
-void pico::OLED::clear(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint8_t fill) {
+void pico::OLED::clear(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1) {
     setWindow(x0, y0, x1, y1);
     beginData();
 
-    for (uint16_t i = 0, end = (x1 - x0) * (y1 - y0 + 1); i < end; i++)
-        sendByte(fill);
+    for (uint16_t i = 0, end = (x1 - x0 + 1) * (y1 - y0 + 1); i < end; i++) sendByte(0);
 
     endTransm();
     setCursor(0, 0);
 }
 
-void pico::OLED::setCursor(uint8_t x, uint8_t y) {
-    cursor_x = x;
-    cursor_y = y;
+void pico::OLED::setCursor(uint8_t _x, uint8_t _y) {
+    x = _x;
+    y = _y;
     updateTextWindow();
 }
+
+void pico::OLED::setCursor() { setCursor(0, 0); }
 
 void pico::OLED::setBright(uint8_t value) {
     sendCommand((value > 0) ? OLED_DISPLAY_ON : OLED_DISPLAY_OFF);
     sendTwoCommands(OLED_CONTRAST, value);
 }
 
-void pico::OLED::setInvertColor(bool mode) {sendCommand(mode ? OLED_INVERTDISPLAY : OLED_NORMALDISPLAY);}
+void pico::OLED::setInvertColor(bool mode) { sendCommand(mode ? OLED_INVERTDISPLAY : OLED_NORMALDISPLAY); }
 
-void pico::OLED::setInvertText(bool mode) {text_mask = mode * 255;}
+void pico::OLED::setInvertText(bool mode) { text_mask = mode ? 0xFF : 0; }
 
-void pico::OLED::setFlipV(bool mode) {sendCommand(mode ? OLED_FLIP_V : OLED_NORMAL_V);}
+void pico::OLED::setFlipV(bool mode) { sendCommand(mode ? OLED_FLIP_V : OLED_NORMAL_V); }
 
-void pico::OLED::setFlipH(bool mode) {sendCommand(mode ? OLED_FLIP_H : OLED_NORMAL_H);}
+void pico::OLED::setFlipH(bool mode) { sendCommand(mode ? OLED_FLIP_H : OLED_NORMAL_H); }
 
-void pico::OLED::setAutoNextLine(bool mode) {autoprintln = mode;}
+void pico::OLED::setAutoNextLine(bool mode) { autoprintln = mode; }
 
 void pico::OLED::setFont(Font ft) {
-    font_height = (ft & 0xF0) >> 4;
-    font_width = (ft & 0x0F);
+    font_height = ((uint8_t)ft & 0xF0) >> 4;
+    font_width = ((uint8_t)ft & 0x0F);
     updateTextWindow();
 }
 
@@ -389,24 +388,20 @@ void pico::OLED::setWindow(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1) {
     endTransm();
 }
 
-void pico::OLED::beginData() {
-    Wire.beginTransmission(address);
-    Wire.write(OLED_DATA_MODE);
-}
+void pico::OLED::updateTextWindow() { setWindow(x, y, OLED_MAX_X, y + font_height - 1); }
 
-void pico::OLED::beginCommand() {
-    Wire.beginTransmission(address);
-    Wire.write(OLED_COMMAND_MODE);
-}
+void pico::OLED::beginData() { beginTransm(OLED_DATA_MODE); }
 
-void pico::OLED::beginOneCommand() {
-    Wire.beginTransmission(address);
-    Wire.write(OLED_ONE_COMMAND_MODE);
-}
+void pico::OLED::beginCommand() { beginTransm(OLED_COMMAND_MODE); }
+
+void pico::OLED::beginOneCommand() { beginTransm(OLED_ONE_COMMAND_MODE); }
 
 void pico::OLED::endTransm() {
     Wire.endTransmission();
     writes = 0;
 }
 
-void pico::OLED::updateTextWindow() {setWindow(cursor_x, cursor_y, OLED_MAX_X, cursor_y + font_height - 1);}
+void pico::OLED::beginTransm(uint8_t mode) {
+    Wire.beginTransmission(address);
+    Wire.write(mode);
+}
